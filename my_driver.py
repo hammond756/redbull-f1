@@ -4,9 +4,15 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
 import torch
-from torch.autograd import Variable as var
-import my_model
 
+from redbullf1.my_model import MaxVerstappen
+from redbullf1.rnn import DrivingRNN
+
+from torch.autograd import Variable as var
+import os
+import sys
+
+MPS_PER_KMH = 1000 / 3600
 
 class MyDriver(Driver):
     # Override the `drive` method to create your own driver
@@ -16,48 +22,64 @@ class MyDriver(Driver):
     #     command = Command(...)
     #     return command
 
-    def load_data(track):
+    model = None
 
-        # make sure variable 'track' will be usable in the near future..
-        data = pd.read_csv('training_data/train_data/aalborg.csv')
+    def __init__(self, logdata=False):
+        super().__init__(logdata)
+        path = os.path.dirname(os.path.abspath(__file__))
+        # model = MaxVerstappen(22, 13, 1)
+        model = DrivingRNN(15, 22, 1)
+        model.load_state_dict(torch.load(os.path.join('redbullf1', 'steering-aalborg-lstm.h5')))
+        # model.load_state_dict(torch.load(os.path.join('redbullf1', 'steering-all_given_tracks.h5')))
+        self.model = model
 
-        ## x_data being the sensor input
-        x_data = data.iloc[:, 3:25].values
+    def read_state(self, carstate):
+        """ Transforms carstate as described in car.py to format used to
+            train on. """
+        parsed_state = []
+        parsed_state.append(carstate.speed_x)
+        parsed_state.append(carstate.distance_from_center)
+        parsed_state.append(carstate.angle)
+        parsed_state.extend(list(carstate.distances_from_edge))
+        parsed_state = np.array(parsed_state)
 
-        print(len(x_data))
-        ## y_data being the steering output (so far)
-        y_data = ['STEERING'].values
+        return var(torch.from_numpy(parsed_state).type(torch.FloatTensor))
 
-        x_train, x_valid, y_train, y_valid = train_test_split(x_data, y_data, test_size=0.2, random_state=0)
+    def drive(self, carstate: State) -> Command:
+        """
+        Produces driving command in response to newly received car state.
 
-        return x_train, x_valid, y_train, y_valid
+        This is a dummy driving routine, very dumb and not really considering a
+        lot of inputs. But it will get the car (if not disturbed by other
+        drivers) successfully driven along the race track.
+        """
 
-    def build_model(sen_in, car_in):
+        command = Command()
 
-        inputs = sen_in + car_in
+        state = self.read_state(carstate)
 
-        hidden_1 = 20
-        hidden_2 = 40
-        hidden_3 = 50
+        # needed for rnn
+        hidden = self.model.init_hidden(1)
 
-        output = 1
+        try:
+            command.steering = self.model(state, hidden)[0].data[0]
+            # command.steering = self.model(state).data[0]
+            print(command.steering)
+        except:
+            print(sys.exc_info())
+            os.system('pkill torcs')
+            sys.exit()
 
-        # Example of using Sequential
-        model = nn.Sequential(
-                  nn.Conv1d(inputs,hidden_1, 5),
-                  nn.ReLU(),
-                  nn.Conv1d(hidden_1,hidden_2, 5),
-                  nn.ReLU()
-                  nn.Conv1d(hidden_2, 5),
-                  nn.ReLu()
-                )
 
-        return model
+        print("Steering:", command.steering)
 
-    def train_model():
+        # ACC_LATERAL_MAX = 6400 * 5
+        # v_x = min(80, math.sqrt(ACC_LATERAL_MAX / abs(command.steering)))
+        v_x = 80
 
-        # TODO
+        self.accelerate(carstate, v_x, command)
 
-        return model
+        if self.data_logger:
+            self.data_logger.log(carstate, command)
 
-#
+        return command
