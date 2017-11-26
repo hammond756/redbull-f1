@@ -1,0 +1,63 @@
+#! /usr/bin/env python3
+import os
+import time
+import sys
+from pytocl.main import main
+
+import torch
+
+from models.simple_network import SimpleNetwork
+from models.rnn import RNN
+
+from drivers.simple_driver import SimpleDriver
+from drivers.rnn_driver import RNNDriver
+
+model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_models')
+
+
+def get_int_units(file_name):
+    return [int(x) for x in file_name.split('-')]
+
+def parse_model_name(file_name):
+    # split into label, n_units and modelname
+    label, units, model_name = file_name.split('_')[1:]
+
+    # extract integers from n_units
+    units = get_int_units(units)
+
+    return units, model_name[:-3]
+
+if __name__ == '__main__':
+
+    driver = None
+
+    # Change second argument to saved model and execute 'python run.py'
+    # the rest is maganged by the script. Couldn't get cmd-line arguments
+    # to work because they interfere with pytocl
+    model_parameters = os.path.join(model_dir, 'steering-all_22-13-1_SimpleNetwork.h5')
+
+    units, model_name = parse_model_name(model_parameters)
+
+    if model_name == 'SimpleNetwork':
+        model = SimpleNetwork(units[0], units[1], units[2])
+        driver = SimpleDriver(model, model_parameters)
+    if model_name == 'RNN':
+        model = RNN(units[0], units[1], units[2])
+        driver = RNNDriver(model, model_parameters)
+
+
+
+
+    # Automatically start torcs
+    os.system('pkill torcs')
+    time.sleep(0.5)
+    os.system('torcs -nofuel -nolaptime &')
+
+    time.sleep(0.5)
+
+    # Auto naviagate GUI
+    os.system('sh autostart.sh')
+    time.sleep(0.5)
+
+    # Start client
+    main(driver)
