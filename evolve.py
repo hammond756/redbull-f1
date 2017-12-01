@@ -74,33 +74,13 @@ def eval_single_genome(genome, config):
 
     return
 
-def eval_10_genomes(genomes, config):
-    func = functools.partial(eval_single_genome, config=config)
-
-    # Spawn 10 workers to handle evaluation in parallel
-    with Pool(10) as p:
-        p.map(func, genomes)
-
-    return
-
-def batch(iterable, n=1):
-    l = len(iterable)
-    for ndx in range(0, l, n):
-        yield iterable[ndx:min(ndx + n, l)]
 
 # multi specifies multiprocessing or not. But it doens't work, so stick with
 # False
 def eval_genomes(genomes, config, multi=False):
     os.system('pkill torcs')
     if multi:
-        # disregard genome id's
-        genomes = list(map(lambda x: x[1], genomes))
-
-        for batch_of_genomes in batch(genomes, n=10):
-            eval_10_genomes(genomes, config)
-
-        for genome in genomes:
-            print("Fitness", genome.fitness)
+        raise NotImplementedError()
     else:
         for gen_id, genome in genomes:
             eval_single_genome(genome, config)
@@ -136,5 +116,3 @@ if __name__ == '__main__':
     driver = NEATDriver(network=winning_network)
     client = Client(driver=driver)
     client.run()
-
-    print("Winner::::", winner)
