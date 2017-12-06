@@ -23,40 +23,12 @@ class RNN(nn.Module):
         self.rnn = nn.LSTM(hidden_units, hidden_units, num_layers=2, dropout=0.05)
         self.output = nn.Linear(hidden_units, output_size)
 
-    # # internal version of forward (i think)
-    # def step(self, input, hidden=None):
-    #     trans_input = self.input(input.view(1, -1)).unsqueeze(1)
-    #     out, hidden = self.rnn(trans_input, hidden)
-    #     out = self.output(out.squeeze(1))
-    #     return out, hidden
-
-    # def forward(self, inputs, hidden=None, force=True, steps=0):
-    #     if force or steps == 0:
-    #         steps = len(inputs)
-    #
-    #     # initialize buffer for memory
-    #     outputs = var(torch.zeros(steps, 1, 1))
-    #
-    #     # iterate over lenght of inputs (each inp is 1xinput_size)
-    #     for i in range(steps):
-    #         if force or i == 0:
-    #             inp = inputs[i]
-    #         else:
-    #             # here you replace the input by the previous output
-    #             inp = output
-    #
-    #         # do regular forward pass based on current input
-    #         output, hidden = self.step(inp, hidden)
-    #
-    #         # add ouput to mempory
-    #         outputs[i] = output
-    #
-    #     return outputs, hidden
-
     def forward(self, input, hidden):
         inp = self.input(input.view(1,-1)).unsqueeze(1)
+        #print("INPUT: ", inp)
         output, hidden = self.rnn(inp, hidden)
         output = self.output(output.view(1, -1))
+
         return output, hidden
 
     def init_hidden(self, batch_size):
@@ -66,47 +38,150 @@ class RNN(nn.Module):
     def get_n_units(self):
         return (self.in_dim, self.hidden_units, self.out_dim)
 
-def train_rnn():
-    n_epochs = 5
-    hidden_units = 15
+# This class is intended for braking and accelerating only
+class GASSEN(nn.Module):
+    def __init__(self, input_size, hidden_units, output_size):
+        super(GASSEN, self).__init__()
 
-    data = TorcsDataLoader.TorcsTrackDataset(['aalborg.csv',
-                                              'alpine-1.csv',
-                                              'f-speedway.csv'])
+        self.hidden_units = hidden_units
+        self.in_dim = input_size
+        self.out_dim = output_size
 
-    model = RNN(data.x_dim, hidden_units, 1)
+        # define layers
+        self.input = nn.Linear(input_size, hidden_units)
+        self.rnn = nn.LSTM(hidden_units, hidden_units, num_layers=2, dropout=0.05)
+        self.output = nn.Linear(hidden_units, output_size)
+
+
+    def forward(self, input, hidden):
+        inp = self.input(input.view(1,-1)).unsqueeze(1)
+        #print("INPUT: ", inp)
+        output, hidden = self.rnn(inp, hidden)
+        output = self.output(output.view(1, -1))
+
+        return F.sigmoid(output), hidden
+
+    def init_hidden(self, batch_size):
+        return (var(torch.zeros(2, batch_size, self.hidden_units)),
+                    var(torch.zeros(2, batch_size, self.hidden_units)))
+
+    def get_n_units(self):
+        return (self.in_dim, self.hidden_units, self.out_dim)
+
+class REMMEN(nn.Module):
+    def __init__(self, input_size, hidden_units, output_size):
+        super(REMMEN, self).__init__()
+
+        self.hidden_units = hidden_units
+        self.in_dim = input_size
+        self.out_dim = output_size
+
+        # define layers
+        self.input = nn.Linear(input_size, hidden_units)
+        self.rnn = nn.LSTM(hidden_units, hidden_units, num_layers=2, dropout=0.05)
+        self.output = nn.Linear(hidden_units, output_size)
+
+
+    def forward(self, input, hidden):
+        inp = self.input(input.view(1,-1)).unsqueeze(1)
+        #print("INPUT: ", inp)
+        output, hidden = self.rnn(inp, hidden)
+        output = self.output(output.view(1, -1))
+
+        return output, hidden
+
+    def init_hidden(self, batch_size):
+        return (var(torch.zeros(2, batch_size, self.hidden_units)),
+                    var(torch.zeros(2, batch_size, self.hidden_units)))
+
+    def get_n_units(self):
+        return (self.in_dim, self.hidden_units, self.out_dim)
+
+
+def train_rnn(test_load=False):
+
+    ####AMEND THESE PARAMETERS:#################################################
+    n_epochs = 10
+    hidden_units = 17
+
+    trained_name = 'remmen-sigmoid-6tracks-10epochs-10laps'
+
+    csv_files = ['road_aalborg_1cars_2912334.csv',
+                 'road_ruudskogen_1cars_28195153.csv',
+                 'road_wheel-2_1cars_29114320.csv',
+                 'road_forza_1cars_2895946.csv',
+                 'road_g-track-1_1cars_28114651.csv',
+                 'road_g-track-2_1cars_28192630.csv']
+    ###########################################################################
+
+    data = TorcsDataLoader.TorcsTrackDataset(csv_files)
+    nr_records = len(data.targets)
+
+    # Use this method to view the loaded data without going straight to training.
+
+    print("First 10 records for states:")
+    print(data.carstates[:10])
+    print(data.carstates.shape)
+    print("Shape: ", data.x_dim)
+    print("First 10 records for targets:")
+    print(data.targets[:10])
+    print(data.targets.shape)
+    print("Shape: ", data.t_dim)
+
+
+    # SELECT MODEL HERE (SIGMOID OR NOT):
+    model = REMMEN(data.x_dim, hidden_units, data.t_dim)
+    print("Object type: ", model)
+
+    if test_load == True:
+        return
+
+    stats = open(trained_name + ".txt", 'w')
+
+    stats.write("Number of epochs: %d\r\n" % (n_epochs))
+    stats.write("Hidden_units:     %d\r\n" % (hidden_units))
+    stats.write("Files used:\r\n")
+    for csv_file in csv_files:
+        stats.write("\t - %s\r\n" % csv_file)
+    stats.write("Total records: {}\r\n".format(nr_records))
+
+
     loss_func = nn.MSELoss()
-    optimzer = optim.Adam(model.parameters(), lr=1e-4)
-
-
+    optimzer = optim.Adam(model.parameters(), lr=1e-5)
 
     for epoch in range(n_epochs):
+        stats.write("Training stats: \r\n")
         total_loss = 0
         for i, observation in enumerate(data):
-            x_t = observation['input']
-            target = observation['target']
 
-            if i % 1000 == 0: print(i)
+            x_t = observation['input']
+            targets = observation['target']
+
+            if i % 1000 == 0: print("Iteration: ", i)
 
             hidden = model.init_hidden(1)
 
+
             inp = var(torch.FloatTensor(x_t))
-            target = var(torch.FloatTensor([target]), requires_grad=False)
+            targets = var(torch.FloatTensor([targets]), requires_grad=False)
+
 
             outputs, hidden = model(inp, hidden)
             model.zero_grad()
 
-            loss = loss_func(outputs.view(1, -1), target)
+            loss = loss_func(outputs.view(1, -1), targets)
             loss.backward()
             optimzer.step()
 
             total_loss += loss.data[0]
 
-        if epoch % 10 == 0:
-            print('Epoch', epoch, "Loss", total_loss)
+        # Logging data:
+        stats.write("Epoch: {}/{}, Total loss: {}".format(epoch+1, n_epochs, total_loss))
+        print('Finishing epoch', epoch+1, 'of', n_epochs, " | Loss", total_loss)
 
-    TorcsDataLoader.save_parameters(model, 'steering')
+    TorcsDataLoader.save_parameters(model, trained_name)
+    stats.close()
 
 if __name__ == '__main__':
     import TorcsDataLoader
-    train_rnn()
+    train_rnn(test_load=False)
