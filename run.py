@@ -7,7 +7,7 @@ from pytocl.main import main
 import torch
 
 from models.simple_network import SimpleNetwork
-from models.rnn import RNN
+from models.rnn import RNN, GASSEN, REMMEN
 
 from drivers.simple_driver import SimpleDriver
 from drivers.rnn_driver import RNNDriver
@@ -27,6 +27,7 @@ def parse_model_name(file_name):
 
     return units, model_name[:-3]
 
+
 if __name__ == '__main__':
 
     driver = None
@@ -34,19 +35,34 @@ if __name__ == '__main__':
     # Change second argument to saved model and execute 'python run.py'
     # the rest is maganged by the script. Couldn't get cmd-line arguments
     # to work because they interfere with pytocl
-    model_parameters = os.path.join(model_dir, 'steering-all_22-13-1_SimpleNetwork.h5')
+
+    # STUUR MODEL HIER
+    model_parameters = os.path.join(model_dir, 'sturen-6tracks-30epochs-10laps_22-17-1_RNN.h5')
+
+    # GASSEN MODEL HIER
+    model_parameters_a = os.path.join(model_dir, 'GASSEN-RNN/gassen-sigact-6tracks-20epochs-10laps_22-17-2_GASSEN.h5')
+
+    # REMMEN MODEL HIER - Deze wordt niet gebruikt!!!!
+    model_parameters_b = os.path.join(model_dir, 'remmen-sigmoid-6tracks-10epochs-10laps_22-17-1_REMMEN.h5')
 
     units, model_name = parse_model_name(model_parameters)
+    units_a, model_name_a = parse_model_name(model_parameters_a)
+    units_b, model_name_b = parse_model_name(model_parameters_b)
 
     if model_name == 'SimpleNetwork':
         model = SimpleNetwork(units[0], units[1], units[2])
         driver = SimpleDriver(model, model_parameters)
     if model_name == 'RNN':
         model = RNN(units[0], units[1], units[2])
-        driver = RNNDriver(model, model_parameters)
+        accel = GASSEN(units_a[0], units_a[1], units_a[2])
+        brake = REMMEN(units_b[0], units_b[1], units_b[2])
+        driver = RNNDriver(model, model_parameters,
+                           accel, model_parameters_a, brake)#, model_parameters_b)
 
-
-
+    print("Model used: ", model_name)
+    print("Input dimension:  ", units[0])
+    print("Hidden units:     ", units[1])
+    print("Output dimension: ", units[2])
 
     # Automatically start torcs
     os.system('pkill torcs')
