@@ -15,6 +15,11 @@ sys.path.insert(0, path_to_project_root)
 from models.rnn import RNN
 from drivers.my_driver import MyDriver
 
+MPS_PER_KMH = 1000 / 3600
+MAX_SPEED = 300
+MIN_SPEED = 120
+
+
 class RNNDriver(MyDriver):
 
     def drive(self, carstate: State) -> Command:
@@ -30,27 +35,85 @@ class RNNDriver(MyDriver):
 
         state = self.read_state(carstate)
 
-        # make sure the application stops if something goes wrong with the
-        # forward pass
+        current_speed = carstate.speed_x / MPS_PER_KMH
+
+        brk_factor = (current_speed / MAX_SPEED) * 50
+
+        # Braking and accelerating control:\
+
+        max_range = max(carstate.distances_from_edge[8:11])
+
         try:
-            # needed for rnn
-            hidden = self.model.init_hidden(1)
-            command.steering = self.model(state, hidden)[0].data[0] * 0.5
+            hidden_a = self.model_a.init_hidden(1)
+            acc_value = self.model_a(state, hidden_a)[0].data[0][0]
+            brk_value = self.model_a(state, hidden_a)[0].data[0][1]
+
+            if acc_value > 0.99:
+                if current_speed < MAX_SPEED:
+                    if current_speed > MIN_SPEED:
+                        if max_range < 150:
+                            command.accelerator = 0.0
+                            command.brake = brk_value * brk_factor
+                        else:
+                            command.accelerator = acc_value
+                            command.brake = 0.0
+                    else:
+                        command.accelerator = acc_value
+                        command.brake = brk_value
+                else:
+                    command.accelerator = 0.0
+
         except:
-            print(sys.exc_info())
-            os.system('pkill torcs')
-            sys.exit()
+            print("Using a single model")
 
 
-        print("Steering:", command.steering)
+        print("Accel value: ", command.accelerator)
+        print("Brake value: ", command.brake)
+        print("Distance max: ", max_range)
 
-        # ACC_LATERAL_MAX = 6400 * 5
-        # v_x = min(80, math.sqrt(ACC_LATERAL_MAX / abs(command.steering)))
-        v_x = 160
+        ## Steering instructions:
+        hidden = self.model.init_hidden(1)
+        out_steer = self.model(state, hidden)[0].data[0][0]
+        print("Carstate angle: ", carstate.angle)
+        print("Carstate pos_t: ", carstate.distance_from_center)
 
-        self.accelerate(carstate, v_x, command)
+        str_factor = 2
+        cor_steer = out_steer * str_factor
+
+        command.steering = out_steer
+
+        if carstate.distance_from_center > 0.0:
+            if carstate.distances_from_edge[0] > 2:
+                if carstate.angle < 0.0:
+                    print("USING CORRECTED STEERING")
+                    command.steering = cor_steer
+        else:
+            if carstate.distances_from_edge[18] > 2:
+                if carstate.angle > 0.0:
+                    print("USING CORRECTED STEERING")
+                    command.steering = cor_steer
+
+        print("Steering:", cor_steer)
+
+        print("")
+        if carstate.rpm > 8000:
+            command.gear = carstate.gear + 1
+
+        if carstate.rpm < 2500:
+            command.gear = carstate.gear - 1
+
+        if not command.gear:
+            command.gear = carstate.gear or 1
 
         if self.data_logger:
             self.data_logger.log(carstate, command)
 
         return command
+
+
+    def crashed(edges, track_pos, track_ang, damage):
+        if edges[9] < 0.0:
+            print(track_pos)
+            return True
+
+        return False
