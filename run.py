@@ -40,14 +40,14 @@ if __name__ == '__main__':
     model_parameters = os.path.join(model_dir, 'sturen-6tracks-30epochs-10laps_22-17-1_RNN.h5')
 
     # GASSEN MODEL HIER
-    model_parameters_a = os.path.join(model_dir, 'GASSEN-RNN/gassen-sigact-6tracks-20epochs-10laps_22-17-2_GASSEN.h5')
+    model_parameters_a = os.path.join(model_dir, 'gassen-sigact-6tracks-20epochs-10laps_22-17-2_GASSEN.h5')
 
     # REMMEN MODEL HIER - Deze wordt niet gebruikt!!!!
-    model_parameters_b = os.path.join(model_dir, 'remmen-sigmoid-6tracks-10epochs-10laps_22-17-1_REMMEN.h5')
+    # model_parameters_b = os.path.join(model_dir, 'remmen-sigmoid-6tracks-10epochs-10laps_22-17-1_REMMEN.h5')
 
     units, model_name = parse_model_name(model_parameters)
     units_a, model_name_a = parse_model_name(model_parameters_a)
-    units_b, model_name_b = parse_model_name(model_parameters_b)
+    # units_b, model_name_b = parse_model_name(model_parameters_b)
 
     if model_name == 'SimpleNetwork':
         model = SimpleNetwork(units[0], units[1], units[2])
@@ -55,9 +55,9 @@ if __name__ == '__main__':
     if model_name == 'RNN':
         model = RNN(units[0], units[1], units[2])
         accel = GASSEN(units_a[0], units_a[1], units_a[2])
-        brake = REMMEN(units_b[0], units_b[1], units_b[2])
+        # brake = REMMEN(units_b[0], units_b[1], units_b[2])
         driver = RNNDriver(model, model_parameters,
-                           accel, model_parameters_a, brake)#, model_parameters_b)
+                           accel, model_parameters_a)#, model_parameters_b)
 
     print("Model used: ", model_name)
     print("Input dimension:  ", units[0])

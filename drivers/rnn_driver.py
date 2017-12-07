@@ -18,11 +18,12 @@ from drivers.my_driver import MyDriver
 MPS_PER_KMH = 1000 / 3600
 MAX_SPEED = 300
 MIN_SPEED = 120
+EMERGENCY_ACCEL = 0.4
 
 
 class RNNDriver(MyDriver):
 
-    def drive(self, carstate: State) -> Command:
+    def drive(self, carstate: State):
         """
         Produces driving command in response to newly received car state.
 
@@ -32,6 +33,48 @@ class RNNDriver(MyDriver):
         """
 
         command = Command()
+
+        if self.is_stuck(carstate):
+            self.steer(carstate, 0.0, command)
+            command.gear = -1
+            command.accelerator = EMERGENCY_ACCEL
+            command.brake = 0.0
+
+            print("<-------------->")
+            print("I'M STUCK MATE! |")
+            print("<-------------->")
+
+            return command
+
+        elif self.standing_still(carstate):
+            print("<-------------->")
+            print("I'M STANDING STILL |")
+            print("<-------------->")
+
+            self.steer(carstate, 0.0, command)
+            command.gear = 1
+            command.accelerator = EMERGENCY_ACCEL
+            command.brake = 0.0
+
+            return command
+
+        elif self.driving_backwards(carstate):
+            print("<-------------->")
+            print("I'M DRIVING BACKWARDSs |")
+            print("<-------------->")
+
+            print("Angle:", carstate.angle)
+            self.steer(carstate, 0.0, command)
+            command.gear = 1
+            command.accelerator = EMERGENCY_ACCEL
+            command.brake = 0.0
+
+            return command
+
+
+
+
+
 
         state = self.read_state(carstate)
 
@@ -82,16 +125,16 @@ class RNNDriver(MyDriver):
 
         command.steering = out_steer
 
-        if carstate.distance_from_center > 0.0:
-            if carstate.distances_from_edge[0] > 2:
-                if carstate.angle < 0.0:
-                    print("USING CORRECTED STEERING")
-                    command.steering = cor_steer
-        else:
-            if carstate.distances_from_edge[18] > 2:
-                if carstate.angle > 0.0:
-                    print("USING CORRECTED STEERING")
-                    command.steering = cor_steer
+        # if carstate.distance_from_center > 0.0:
+        #     if carstate.distances_from_edge[0] > 2:
+        #         if carstate.angle < 0.0:
+        #             print("USING CORRECTED STEERING")
+        #             command.steering = cor_steer
+        # else:
+        #     if carstate.distances_from_edge[18] > 2:
+        #         if carstate.angle > 0.0:
+        #             print("USING CORRECTED STEERING")
+        #             command.steering = cor_steer
 
         print("Steering:", cor_steer)
 

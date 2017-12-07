@@ -10,11 +10,20 @@ import os
 import sys
 
 MPS_PER_KMH = 1000 / 3600
+MAX_SPEED = 5
+MAX_ANGLE = 20
+MIN_DIST = 1
+MAX_COUNT = 100
+MAX_BACKWARDS = 100
 
 class MyDriver(Driver):
     """ Base class for custom drivers """
 
     model = None
+    stuck = 0
+    standstill = 0
+    from_start = 0
+    backwards = 0
 
     def __init__(self, model, parameters, model_a=None, parameters_a=None, model_b=None, parameters_b=None, logdata=False):
         super().__init__(logdata)
@@ -56,3 +65,73 @@ class MyDriver(Driver):
 
 
         return var(torch.from_numpy(parsed_state).type(torch.FloatTensor))
+
+    def is_stuck(self, carstate):
+        """Adapted from cpp code provided by berniw TORCS driver tuturial"""
+
+
+
+        angle = carstate.angle
+        track_pos = carstate.distance_from_center
+        speed = carstate.speed_x
+
+        data_says_stuck = abs(angle) > MAX_ANGLE and speed < MAX_SPEED \
+            and abs(track_pos) > MIN_DIST
+
+        if data_says_stuck:
+            if (self.stuck > MAX_COUNT and carstate.distance_from_center * carstate.angle < 0):
+                return True
+            else:
+                self.stuck += 1
+                return False
+        else:
+            self.stuck = 0
+            return False
+
+    def standing_still(self, carstate):
+        """Same as is_stuck, but the car faces the other side"""
+
+        # if abs(track_pos > MIN_DIST and speed < MAX_SPEED):
+        #     if self.standstill > MAX_COUNT:
+        #         return True
+        #     else:
+        #         self.standstill += 1
+        #         return False
+        # else:
+        #     self.standstill = 0
+        #     return False
+
+        angle = carstate.angle
+        track_pos = carstate.distance_from_center
+        speed = carstate.speed_x
+
+        data_says_stuck = abs(angle) > MAX_ANGLE and speed < MAX_SPEED \
+            and abs(track_pos) > MIN_DIST
+
+        if data_says_stuck:
+            if (self.standstill > MAX_COUNT and carstate.distance_from_center * carstate.angle > 0):
+                return True
+            else:
+                self.standstill += 1
+                return False
+        else:
+            self.standstill = 0
+            return False
+
+    def driving_backwards(self, carstate):
+
+        print("T::", carstate.distance_raced)
+        print("T-1::", self.from_start)
+
+        if carstate.distance_raced < self.from_start:
+            # the line below gives control back to the main controller sooner,
+            # but looks like is better to stay in recovery mode for longer
+            # self.from_start = carstate.distance_raced
+            if self.backwards > MAX_BACKWARDS:
+                return True
+            else:
+                self.backwards += 1
+                return False
+        else:
+            self.from_start = carstate.distance_raced
+            return False
