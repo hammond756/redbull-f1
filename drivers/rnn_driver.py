@@ -18,12 +18,14 @@ from drivers.my_driver import MyDriver
 MPS_PER_KMH = 1000 / 3600
 MAX_SPEED = 300
 MIN_SPEED = 120
+MAX_FOCUS = 150
+MIN_FOCUS = 40
+DIF_FOCUS = MAX_FOCUS - MIN_FOCUS
 EMERGENCY_ACCEL = 0.4
-
 
 class RNNDriver(MyDriver):
 
-    def drive(self, carstate: State):
+    def drive(self, carstate: State) -> Command:
         """
         Produces driving command in response to newly received car state.
 
@@ -72,17 +74,16 @@ class RNNDriver(MyDriver):
             return command
 
 
-
-
-
-
         state = self.read_state(carstate)
 
         current_speed = carstate.speed_x / MPS_PER_KMH
 
         brk_factor = (current_speed / MAX_SPEED) * 50
 
-        # Braking and accelerating control:\
+        # Braking and accelerating control:
+        focus_distance = MIN_FOCUS + (DIF_FOCUS / MAX_SPEED) * current_speed
+
+        print("Focus distance: ", focus_distance)
 
         max_range = max(carstate.distances_from_edge[8:11])
 
@@ -94,21 +95,20 @@ class RNNDriver(MyDriver):
             if acc_value > 0.99:
                 if current_speed < MAX_SPEED:
                     if current_speed > MIN_SPEED:
-                        if max_range < 150:
+                        if max_range < focus_distance:
                             command.accelerator = 0.0
+
                             command.brake = brk_value * brk_factor
                         else:
                             command.accelerator = acc_value
                             command.brake = 0.0
                     else:
                         command.accelerator = acc_value
-                        command.brake = brk_value
+                        command.brake = 0.0
                 else:
                     command.accelerator = 0.0
-
         except:
             print("Using a single model")
-
 
         print("Accel value: ", command.accelerator)
         print("Brake value: ", command.brake)
@@ -117,26 +117,9 @@ class RNNDriver(MyDriver):
         ## Steering instructions:
         hidden = self.model.init_hidden(1)
         out_steer = self.model(state, hidden)[0].data[0][0]
-        print("Carstate angle: ", carstate.angle)
-        print("Carstate pos_t: ", carstate.distance_from_center)
-
-        str_factor = 2
-        cor_steer = out_steer * str_factor
 
         command.steering = out_steer
-
-        # if carstate.distance_from_center > 0.0:
-        #     if carstate.distances_from_edge[0] > 2:
-        #         if carstate.angle < 0.0:
-        #             print("USING CORRECTED STEERING")
-        #             command.steering = cor_steer
-        # else:
-        #     if carstate.distances_from_edge[18] > 2:
-        #         if carstate.angle > 0.0:
-        #             print("USING CORRECTED STEERING")
-        #             command.steering = cor_steer
-
-        print("Steering:", cor_steer)
+        print("Steering:", command.steering)
 
         print("")
         if carstate.rpm > 8000:
@@ -153,10 +136,5 @@ class RNNDriver(MyDriver):
 
         return command
 
-
-    def crashed(edges, track_pos, track_ang, damage):
-        if edges[9] < 0.0:
-            print(track_pos)
-            return True
 
         return False
